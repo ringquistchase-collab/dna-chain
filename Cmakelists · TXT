@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.10)
+project(interop_client CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(OpenSSL REQUIRED)
+
+add_executable(interop_client interop_client.cpp)
+target_link_libraries(interop_client OpenSSL::SSL OpenSSL::Crypto)
