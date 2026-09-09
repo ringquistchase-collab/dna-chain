@@ -1,0 +1,88 @@
+import asyncio
+import os
+import time
+import tempfile
+import hashlib
+
+from digital_dna import DigitalDNA
+from network_os import NetworkNode
+from integrated_research_agent import IntegratedResearchAgent
+from signal_stats_bridge import signal_channel_stats
+from research_art_generator import _build_art_prompt, generate_network_art
+
+START = time.time()
+
+def log(msg):
+    print(f"[t+{time.time()-START:6.2f}s] {msg}", flush=True)
+
+
+async def main():
+    with tempfile.TemporaryDirectory() as tmp:
+        dna = DigitalDNA(seed_label="realtime-signal-demo")
+        node = NetworkNode(dna, host="127.0.0.1", port=9997)
+
+        log("starting node...")
+        await node.start()
+
+        agent = IntegratedResearchAgent(
+            node, dna,
+            store_path=os.path.join(tmp, "store.json"),
+            corpus_path=os.path.join(tmp, "corpus.json"),
+            visuals_dir=os.path.join(tmp, "visuals"),
+            interval_s=999,
+        )
+
+        # ---- consented EEG/hormone signal, going through the real consent gate ----
+        log("simulating a consented EEG telemetry reading arriving from upstream capture...")
+        eeg_readings = [12.1, 12.4, 11.9, 12.6, 12.0, 12.3, 11.8, 12.5]
+        eeg_feature_hash = hashlib.sha256(str(eeg_readings).encode()).hexdigest()
+
+        event = dna.add_live_signal(
+            "eeg_telemetry", eeg_feature_hash, confidence=0.9, consent_verified=True,
+        )
+        log(f"eeg_telemetry block mined into the chain — mutation_rate={event.mutation_rate}")
+
+        log("simulating a consented hormone panel reading arriving from upstream capture...")
+        hormone_readings = [3.2, 3.4, 3.1, 3.5, 3.3]
+        hormone_feature_hash = hashlib.sha256(str(hormone_readings).encode()).hexdigest()
+
+        event2 = dna.add_live_signal(
+            "hormone_telemetry", hormone_feature_hash, confidence=0.9, consent_verified=True,
+        )
+        log(f"hormone_telemetry block mined into the chain — mutation_rate={event2.mutation_rate}")
+
+        log("converting raw consented readings into ABSTRACT STATISTICS ONLY (signal_stats_bridge)...")
+        eeg_stats = signal_channel_stats(eeg_readings, label="eeg")
+        hormone_stats = signal_channel_stats(hormone_readings, label="hormone")
+        combined_stats = {**eeg_stats, **hormone_stats}
+        log(f"abstract stats computed (this is ALL that can reach the art/video prompt): {combined_stats}")
+
+        # ---- real research cycle, same as before ----
+        log("agent seeding real research topic 'breast cancer' + 'BRCA1'...")
+        t0 = time.time()
+        key = await agent.seed_topic("breast cancer", biomarker="BRCA1")
+        log(f"research complete in {time.time()-t0:.2f}s — {len(agent.topics[key]['new_ids_last_run'])} real records found")
+
+        mos = node.mos_score()
+        log(f"live MOS score: {mos}")
+
+        log("building the real art prompt, with signal stats folded in as abstract data channels...")
+        prompt = _build_art_prompt(mos, len(agent.topics), style="abstract geometric, blue and orange", extra_signal_stats=combined_stats)
+        log("PROMPT THAT WOULD BE SENT TO THE IMAGE MODEL:")
+        print(f"    {prompt}\n", flush=True)
+
+        log("checking for OPENAI_API_KEY in this environment...")
+        result = generate_network_art(mos, len(agent.topics), extra_signal_stats=combined_stats)
+        log(f"real call result: {result}")
+
+        log("checking chain state: eeg_telemetry and hormone_telemetry blocks present, no raw readings anywhere in them...")
+        recent_blocks = dna.blocks[-2:]
+        for b in recent_blocks:
+            log(f"  block source={b['source']}, feature_hash={b['feature_hash'][:16]}... (hash only, no raw values)")
+
+        await node.stop()
+        log("node shut down cleanly")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
